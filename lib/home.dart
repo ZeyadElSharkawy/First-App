@@ -117,14 +117,15 @@ Widget _buildHomePage(Map<String, dynamic> translations, bool isArabic, bool isD
       SafeArea(
         child: Column(
           children: [
-            // Header with umbrella icon
+            // Header with three sections: Home Title | Umbrella Icon | Profile
             SizedBox(
               height: 120, // Fixed height for header area
-              child: Stack(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Home title on left
-                  Align(
-                    alignment: Alignment.centerLeft,
+                  Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(left: 20),
                       child: Text(
@@ -138,13 +139,40 @@ Widget _buildHomePage(Map<String, dynamic> translations, bool isArabic, bool isD
                     ),
                   ),
                   
+                  // Umbrella icon in teal circle in the center
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: primaryColor,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Image.asset(
+                        'lib/weather.png', // Your umbrella/weather icon
+                        width: 40, // Adjust size as needed
+                        height: 40,
+                        fit: BoxFit.contain,
+                        color: Colors.white, // Optional: make icon white to contrast with teal
+                      ),
+                    ),
+                  ),
+                  
                   // Profile on right
-                  Align(
-                    alignment: Alignment.centerRight,
+                  Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 20),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           GestureDetector(
                             onTap: () {
@@ -210,27 +238,20 @@ Widget _buildHomePage(Map<String, dynamic> translations, bool isArabic, bool isD
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            userName.split(' ').first,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              userName.split(' ').first,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  
-                  // Umbrella icon in the center (between Home and Profile)
-                  Align(
-                    alignment: Alignment.center,
-                    child: Image.asset(
-                      'lib/umbrella.png', // Your umbrella/weather icon
-                      width: 80, // Adjust size as needed
-                      height: 80,
-                      fit: BoxFit.contain,
                     ),
                   ),
                 ],

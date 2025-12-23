@@ -97,6 +97,8 @@ class _SignUpState extends State<SignUp> {
   String? certificateError;
   String? licenseError;
   String? profilePhotoError;
+  String? audioRecordingError;  // Add this line
+
 
   // Sample data
   final idTypes = ['National ID', 'Passport'];
@@ -355,28 +357,34 @@ class _SignUpState extends State<SignUp> {
   }
 
   Future<void> _stopAudioRecording() async {
-    try {
-      // Stop recording
-      final path = await _audioRecorder.stop();
-      
-      if (path != null) {
-        setState(() {
-          recordedAudioFile = File(path);
-        });
-        _showSuccess('Recording saved successfully');
-      } else {
-        _showError('Recording failed - no file created');
-      }
-      
-    } catch (e) {
-      _showError('Failed to stop recording: $e');
-    } finally {
+  try {
+    final path = await _audioRecorder.stop();
+    
+    if (path != null) {
       setState(() {
-        isRecordingAudio = false;
-        _recordingTimer?.cancel();
+        recordedAudioFile = File(path);
+        audioRecordingError = null; // Clear error when recording is successful
       });
+      _showSuccess('Recording saved successfully');
+    } else {
+      setState(() {
+        audioRecordingError = 'Recording failed - no file created';
+      });
+      _showError('Recording failed - no file created');
     }
+    
+  } catch (e) {
+    setState(() {
+      audioRecordingError = 'Failed to stop recording: $e';
+    });
+    _showError('Failed to stop recording: $e');
+  } finally {
+    setState(() {
+      isRecordingAudio = false;
+      _recordingTimer?.cancel();
+    });
   }
+}
 
   // Format duration for display
   String _formatDuration(Duration duration) {
@@ -583,6 +591,14 @@ class _SignUpState extends State<SignUp> {
     });
   }
 
+  void _validateAudioRecording() {
+  setState(() {
+    audioRecordingError = recordedAudioFile == null
+        ? 'Audio recording is required'
+        : null;
+  });
+}
+
   // Validate all required fields at submission time
   bool validateAllFieldsAndShowErrors() {
     // Validate all fields to populate error states
@@ -593,6 +609,8 @@ class _SignUpState extends State<SignUp> {
     _validateEmail(emailCtrl.text);
     _validatePassword(passwordCtrl.text);
     _validateConfirmPassword(confirmPasswordCtrl.text);
+    
+
     
     // Validate clinic rows
     for (int i = 0; i < clinicRows.length; i++) {
@@ -615,6 +633,7 @@ class _SignUpState extends State<SignUp> {
     _validateCertificate();
     _validateLicense();
     _validateProfilePhoto();
+    _validateAudioRecording();
 
     // Check if date of birth is selected
     if (selectedDateOfBirth == null) {
@@ -640,7 +659,8 @@ class _SignUpState extends State<SignUp> {
         certificateError != null ||
         licenseError != null ||
         profilePhotoError != null ||
-        dateOfBirthError != null;
+        dateOfBirthError != null ||
+        audioRecordingError != null;
     
     // Check clinic errors
     for (var error in clinicNameErrors) {
@@ -1093,21 +1113,20 @@ class _SignUpState extends State<SignUp> {
     }
   }
 
-  // UI Helper: Show Date Picker
-  Future<void> selectDateOfBirth() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(2000),
-      firstDate: DateTime(1950),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        selectedDateOfBirth = picked;
-        dateOfBirthError = null; // Clear error when date is selected
-      });
-    }
+Future<void> selectDateOfBirth() async {
+  final DateTime? picked = await showDatePicker(
+    context: context,
+    initialDate: DateTime(1990), // Changed from 2000 to 1990
+    firstDate: DateTime(1950),
+    lastDate: DateTime(2001), // Changed from DateTime.now() to 2001
+  );
+  if (picked != null) {
+    setState(() {
+      selectedDateOfBirth = picked;
+      dateOfBirthError = null;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1636,9 +1655,9 @@ class _SignUpState extends State<SignUp> {
                       const SizedBox(height: 20),
 
                       // ==========================================
-                      // AUDIO/VIDEO RECORDING SECTION
+                      // AUDIO RECORDING SECTION
                       // ==========================================
-                      StyledLabel(text: 'Record Audio/Video'),
+                      StyledLabel(text: 'Record Audio'),
                       const SizedBox(height: 8),
 
                       // Audio Recording Button
@@ -1762,9 +1781,17 @@ class _SignUpState extends State<SignUp> {
                           ),
                         ),
 
-                      const SizedBox(height: 16),
+                      // Audio Recording Error Display - MOVED INSIDE NestedSection
+                      if (audioRecordingError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            audioRecordingError!,
+                            style: TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ),
 
-                      
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ],
