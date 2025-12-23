@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "849892312036",
+    "project_id": "first-project-856aa",
+    "storage_bucket": "first-project-856aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:849892312036:android:07ed8c81c8af875f67fdf1",
+        "android_client_info": {
+          "package_name": "com.example.coffee_card"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEmO7yNFA-Oh3na66sYHaP89pusPLELr0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
