@@ -4,6 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'dart:async';
+import 'package:record/record.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 import 'Classes/NestedSections.dart';
 import 'Classes/Buttons.dart';
 import 'Classes/Labels.dart';
@@ -39,19 +42,16 @@ class _SignUpState extends State<SignUp> {
   bool isRecordingVideo = false;
   File? recordedAudioFile;
   File? recordedVideoFile;
-  Duration _recordingDuration = Duration.zero; // FIX: Added missing variable
-
-  // Add timer for recording duration
+  Duration _recordingDuration = Duration.zero;
   Timer? _recordingTimer;
-
-  // Uncomment if you have the audio_recorder package
-  // late final RecorderController recorderController;
-  // late final Directory appDocDirectory;
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _hasRecordingPermission = false;
 
   // Clinic Search Variables
   List<Map<String, String>> availableClinics = [];
   List<Map<String, String>> filteredClinics = [];
   bool showClinicDropdown = false;
+  int? currentSearchClinicIndex; // Track which clinic row is being searched
 
   // Personal Info Controllers
   final fullNameCtrl = TextEditingController();
@@ -62,15 +62,11 @@ class _SignUpState extends State<SignUp> {
   final passwordCtrl = TextEditingController();
   final confirmPasswordCtrl = TextEditingController();
 
-  // Work Info Controllers
-  final clinicNameCtrl = TextEditingController();
-  final clinicAddressCtrl = TextEditingController();
-  final clinicPhoneCtrl = TextEditingController();
-
-  // Medical Info Controllers
-  final diagnosisCtrl = TextEditingController();
-  final operationsCtrl = TextEditingController();
-  final medicationsCtrl = TextEditingController();
+  // 1. DYNAMIC LISTS FOR MULTIPLE ENTRIES
+  List<Map<String, TextEditingController>> clinicRows = [];
+  List<TextEditingController> diagnosisRows = [TextEditingController()];
+  List<TextEditingController> operationsRows = [TextEditingController()];
+  List<TextEditingController> medicationsRows = [TextEditingController()];
 
   // Dropdown values
   String? selectedIdType = 'National ID';
@@ -92,12 +88,12 @@ class _SignUpState extends State<SignUp> {
   String? passwordError;
   String? confirmPasswordError;
   String? dateOfBirthError;
-  String? clinicNameError;
-  String? clinicAddressError;
-  String? clinicPhoneError;
-  String? diagnosisError;
-  String? operationsError;
-  String? medicationsError;
+  List<String?> clinicNameErrors = [];
+  List<String?> clinicAddressErrors = [];
+  List<String?> clinicPhoneErrors = [];
+  List<String?> diagnosisErrors = [];
+  List<String?> operationsErrors = [];
+  List<String?> medicationsErrors = [];
   String? certificateError;
   String? licenseError;
   String? profilePhotoError;
@@ -141,21 +137,97 @@ class _SignUpState extends State<SignUp> {
   void initState() {
     super.initState();
     _pageController = PageController();
-    // _initializeRecorder();
+    
+    // Set default values for personal info dropdowns with safe checks
+    selectedCity = cities.isNotEmpty ? cities.first : 'Riyadh';
+    selectedRegion = regions.isNotEmpty ? regions.first : 'Region 1';
+
+    // Initialize with one empty clinic row
+    _addClinicRow();
+    
+    // Initialize medical info rows with safe defaults
+    diagnosisRows = [TextEditingController()];
+    operationsRows = [TextEditingController()];
+    medicationsRows = [TextEditingController()];
+    
+    // Initialize error lists
+    diagnosisErrors = [null];
+    operationsErrors = [null];
+    medicationsErrors = [null];
+    
     _loadClinicsFromBackend();
+    _checkRecordingPermission();
   }
 
-  // Initialize audio recorder
-  // Uncomment if you have the audio recording package
-  // Future<void> _initializeRecorder() async {
-  //   try {
-  //     appDocDirectory = await getApplicationDocumentsDirectory();
-  //     recorderController = RecorderController();
-  //     await recorderController.checkPermission();
-  //   } catch (e) {
-  //     _showError('Error initializing recorder: $e');
-  //   }
-  // }
+  void _addClinicRow() {
+    setState(() {
+      clinicRows.add({
+        'name': TextEditingController(),
+        'address': TextEditingController(),
+        'phone': TextEditingController(),
+      });
+      clinicNameErrors.add(null);
+      clinicAddressErrors.add(null);
+      clinicPhoneErrors.add(null);
+    });
+  }
+
+  void _addDiagnosisRow() {
+    setState(() {
+      diagnosisRows.add(TextEditingController());
+      diagnosisErrors.add(null);
+    });
+  }
+
+  void _addOperationsRow() {
+    setState(() {
+      operationsRows.add(TextEditingController());
+      operationsErrors.add(null);
+    });
+  }
+
+  void _addMedicationsRow() {
+    setState(() {
+      medicationsRows.add(TextEditingController());
+      medicationsErrors.add(null);
+    });
+  }
+
+  void _removeClinicRow(int index) {
+    setState(() {
+      clinicRows[index]['name']!.dispose();
+      clinicRows[index]['address']!.dispose();
+      clinicRows[index]['phone']!.dispose();
+      clinicRows.removeAt(index);
+      clinicNameErrors.removeAt(index);
+      clinicAddressErrors.removeAt(index);
+      clinicPhoneErrors.removeAt(index);
+    });
+  }
+
+  void _removeDiagnosisRow(int index) {
+    setState(() {
+      diagnosisRows[index].dispose();
+      diagnosisRows.removeAt(index);
+      diagnosisErrors.removeAt(index);
+    });
+  }
+
+  void _removeOperationsRow(int index) {
+    setState(() {
+      operationsRows[index].dispose();
+      operationsRows.removeAt(index);
+      operationsErrors.removeAt(index);
+    });
+  }
+
+  void _removeMedicationsRow(int index) {
+    setState(() {
+      medicationsRows[index].dispose();
+      medicationsRows.removeAt(index);
+      medicationsErrors.removeAt(index);
+    });
+  }
 
   // Load clinics from Firestore on startup
   Future<void> _loadClinicsFromBackend() async {
@@ -170,14 +242,25 @@ class _SignUpState extends State<SignUp> {
     }
   }
 
+  // Check recording permission
+  Future<void> _checkRecordingPermission() async {
+    final permission = await Permission.microphone.request();
+    setState(() {
+      _hasRecordingPermission = permission == PermissionStatus.granted;
+    });
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
-    // recorderController.dispose();
 
     // Stop recording timer if active
     _recordingTimer?.cancel();
 
+    // Dispose audio recorder
+    _audioRecorder.dispose();
+
+    // Dispose all controllers
     fullNameCtrl.dispose();
     idCtrl.dispose();
     addressCtrl.dispose();
@@ -185,55 +268,127 @@ class _SignUpState extends State<SignUp> {
     emailCtrl.dispose();
     passwordCtrl.dispose();
     confirmPasswordCtrl.dispose();
-    clinicNameCtrl.dispose();
-    clinicAddressCtrl.dispose();
-    clinicPhoneCtrl.dispose();
-    diagnosisCtrl.dispose();
-    operationsCtrl.dispose();
-    medicationsCtrl.dispose();
+    
+    // Dispose clinic controllers
+    for (var row in clinicRows) {
+      row['name']!.dispose();
+      row['address']!.dispose();
+      row['phone']!.dispose();
+    }
+    
+    // Dispose medical info controllers
+    for (var ctrl in diagnosisRows) {
+      ctrl.dispose();
+    }
+    for (var ctrl in operationsRows) {
+      ctrl.dispose();
+    }
+    for (var ctrl in medicationsRows) {
+      ctrl.dispose();
+    }
+    
     super.dispose();
   }
 
-  // FIX: Added missing method to toggle audio recording
-  void _toggleAudioRecording() {
+  // Audio Recording Methods
+  Future<void> _toggleAudioRecording() async {
+    if (!_hasRecordingPermission) {
+      await _checkRecordingPermission();
+      if (!_hasRecordingPermission) {
+        _showError('Microphone permission is required for recording');
+        return;
+      }
+    }
+
     setState(() {
       if (isRecordingAudio) {
         // Stop recording
         isRecordingAudio = false;
         _recordingTimer?.cancel();
         _recordingDuration = Duration.zero;
-
-        // TODO: Implement actual audio recording stop logic
-        // This is a placeholder - you'll need to implement actual audio recording
-        _showInfo('Audio recording stopped (placeholder)');
-
-        // Placeholder file for demonstration
-        // In a real app, this would be the actual recorded audio file
-        recordedAudioFile = File('path/to/recorded_audio.wav');
+        _stopAudioRecording();
       } else {
         // Start recording
         isRecordingAudio = true;
         _recordingDuration = Duration.zero;
-
-        // Start timer
+        
+        // Start recording timer
         _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
           setState(() {
             _recordingDuration += Duration(seconds: 1);
           });
         });
-
-        // TODO: Implement actual audio recording start logic
-        _showInfo('Audio recording started (placeholder)');
+        
+        // Start actual recording
+        _startAudioRecording();
       }
     });
   }
 
-  // FIX: Added missing method to format duration
+  Future<void> _startAudioRecording() async {
+    try {
+      // Get app directory for saving recordings
+      final directory = await getApplicationDocumentsDirectory();
+      final path = '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      
+      // Configure recording settings
+      final config = RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      );
+      
+      // Start recording
+      await _audioRecorder.start(config, path: path);
+      
+      
+      
+      _showInfo('Recording started...');
+      
+    } catch (e) {
+      _showError('Failed to start recording: $e');
+      setState(() {
+        isRecordingAudio = false;
+        _recordingTimer?.cancel();
+      });
+    }
+  }
+
+  Future<void> _stopAudioRecording() async {
+    try {
+      // Stop recording
+      final path = await _audioRecorder.stop();
+      
+      if (path != null) {
+        setState(() {
+          recordedAudioFile = File(path);
+        });
+        _showSuccess('Recording saved successfully');
+      } else {
+        _showError('Recording failed - no file created');
+      }
+      
+    } catch (e) {
+      _showError('Failed to stop recording: $e');
+    } finally {
+      setState(() {
+        isRecordingAudio = false;
+        _recordingTimer?.cancel();
+      });
+    }
+  }
+
+  // Format duration for display
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return "${duration.inHours > 0 ? '${twoDigits(duration.inHours)}:' : ''}$minutes:$seconds";
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    
+    if (hours > 0) {
+      return '${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(seconds)}';
+    }
+    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
   }
 
   InputDecoration _buildInputDecoration(String hint, {String? errorText}) {
@@ -356,47 +511,51 @@ class _SignUpState extends State<SignUp> {
     });
   }
 
-  void _validateClinicName(String value) {
-    setState(() {
-      clinicNameError = value.isEmpty ? 'Clinic name is required' : null;
-    });
-  }
-
-  void _validateClinicAddress(String value) {
-    setState(() {
-      clinicAddressError = value.isEmpty ? 'Clinic address is required' : null;
-    });
-  }
-
-  void _validateClinicPhone(String value) {
+  void _validateClinicName(int index, String value) {
     setState(() {
       if (value.isEmpty) {
-        clinicPhoneError = 'Clinic phone is required';
-      } else if (!RegExp(
-        r'^[0-9]{7,15}$',
-      ).hasMatch(value.replaceAll(RegExp(r'[^0-9]'), ''))) {
-        clinicPhoneError = 'Invalid phone number';
+        clinicNameErrors[index] = 'Clinic name is required';
       } else {
-        clinicPhoneError = null;
+        clinicNameErrors[index] = null;
       }
     });
   }
 
-  void _validateDiagnosis(String value) {
+  void _validateClinicAddress(int index, String value) {
     setState(() {
-      diagnosisError = value.isEmpty ? 'Please enter medical background' : null;
+      clinicAddressErrors[index] = value.isEmpty ? 'Clinic address is required' : null;
     });
   }
 
-  void _validateOperations(String value) {
+  void _validateClinicPhone(int index, String value) {
     setState(() {
-      operationsError = value.isEmpty ? 'Please enter surgery history' : null;
+      if (value.isEmpty) {
+        clinicPhoneErrors[index] = 'Clinic phone is required';
+      } else if (!RegExp(
+        r'^[0-9]{7,15}$',
+      ).hasMatch(value.replaceAll(RegExp(r'[^0-9]'), ''))) {
+        clinicPhoneErrors[index] = 'Invalid phone number';
+      } else {
+        clinicPhoneErrors[index] = null;
+      }
     });
   }
 
-  void _validateMedications(String value) {
+  void _validateDiagnosis(int index, String value) {
     setState(() {
-      medicationsError = value.isEmpty
+      diagnosisErrors[index] = value.isEmpty ? 'Please enter medical background' : null;
+    });
+  }
+
+  void _validateOperations(int index, String value) {
+    setState(() {
+      operationsErrors[index] = value.isEmpty ? 'Please enter surgery history' : null;
+    });
+  }
+
+  void _validateMedications(int index, String value) {
+    setState(() {
+      medicationsErrors[index] = value.isEmpty
           ? 'Please enter current medications'
           : null;
     });
@@ -425,7 +584,6 @@ class _SignUpState extends State<SignUp> {
   }
 
   // Validate all required fields at submission time
-  // Validate all fields and populate error states (called on signup click)
   bool validateAllFieldsAndShowErrors() {
     // Validate all fields to populate error states
     _validateFullName(fullNameCtrl.text);
@@ -435,12 +593,25 @@ class _SignUpState extends State<SignUp> {
     _validateEmail(emailCtrl.text);
     _validatePassword(passwordCtrl.text);
     _validateConfirmPassword(confirmPasswordCtrl.text);
-    _validateClinicName(clinicNameCtrl.text);
-    _validateClinicAddress(clinicAddressCtrl.text);
-    _validateClinicPhone(clinicPhoneCtrl.text);
-    _validateDiagnosis(diagnosisCtrl.text);
-    _validateOperations(operationsCtrl.text);
-    _validateMedications(medicationsCtrl.text);
+    
+    // Validate clinic rows
+    for (int i = 0; i < clinicRows.length; i++) {
+      _validateClinicName(i, clinicRows[i]['name']!.text);
+      _validateClinicAddress(i, clinicRows[i]['address']!.text);
+      _validateClinicPhone(i, clinicRows[i]['phone']!.text);
+    }
+    
+    // Validate medical info rows
+    for (int i = 0; i < diagnosisRows.length; i++) {
+      _validateDiagnosis(i, diagnosisRows[i].text);
+    }
+    for (int i = 0; i < operationsRows.length; i++) {
+      _validateOperations(i, operationsRows[i].text);
+    }
+    for (int i = 0; i < medicationsRows.length; i++) {
+      _validateMedications(i, medicationsRows[i].text);
+    }
+    
     _validateCertificate();
     _validateLicense();
     _validateProfilePhoto();
@@ -452,110 +623,52 @@ class _SignUpState extends State<SignUp> {
       });
     }
 
-    // Check if all required dropdowns have values (they should have defaults but check anyway)
+    // Check if all required dropdowns have values
     if (selectedMainSpeciality == null || selectedDegree == null) {
       _showError('Please select Main Speciality and Scientific Degree');
       return false;
     }
 
     // Check if there are any errors
-    if (fullNameError != null ||
+    bool hasErrors = fullNameError != null ||
         idError != null ||
         addressError != null ||
         mobileError != null ||
         emailError != null ||
         passwordError != null ||
         confirmPasswordError != null ||
-        clinicNameError != null ||
-        clinicAddressError != null ||
-        clinicPhoneError != null ||
-        diagnosisError != null ||
-        operationsError != null ||
-        medicationsError != null ||
         certificateError != null ||
         licenseError != null ||
         profilePhotoError != null ||
-        dateOfBirthError != null) {
+        dateOfBirthError != null;
+    
+    // Check clinic errors
+    for (var error in clinicNameErrors) {
+      if (error != null) hasErrors = true;
+    }
+    for (var error in clinicAddressErrors) {
+      if (error != null) hasErrors = true;
+    }
+    for (var error in clinicPhoneErrors) {
+      if (error != null) hasErrors = true;
+    }
+    
+    // Check medical info errors
+    for (var error in diagnosisErrors) {
+      if (error != null) hasErrors = true;
+    }
+    for (var error in operationsErrors) {
+      if (error != null) hasErrors = true;
+    }
+    for (var error in medicationsErrors) {
+      if (error != null) hasErrors = true;
+    }
+
+    if (hasErrors) {
       _showError('Please fix all errors before signing up');
       return false;
     }
 
-    return true;
-  }
-
-  bool validateAllRequiredFields() {
-    if (fullNameCtrl.text.isEmpty || fullNameCtrl.text.length < 3) {
-      _showError('Full Name must be at least 3 characters');
-      return false;
-    }
-    if (idCtrl.text.isEmpty) {
-      _showError('ID Number is required');
-      return false;
-    }
-    if (addressCtrl.text.isEmpty) {
-      _showError('Address is required');
-      return false;
-    }
-    if (mobileCtrl.text.isEmpty) {
-      _showError('Mobile Number is required');
-      return false;
-    }
-    if (emailCtrl.text.isEmpty) {
-      _showError('Email is required');
-      return false;
-    }
-    if (passwordCtrl.text.isEmpty) {
-      _showError('Password is required');
-      return false;
-    }
-    if (confirmPasswordCtrl.text.isEmpty) {
-      _showError('Confirm Password is required');
-      return false;
-    }
-    if (clinicNameCtrl.text.isEmpty) {
-      _showError('Clinic Name is required');
-      return false;
-    }
-    if (clinicAddressCtrl.text.isEmpty) {
-      _showError('Clinic Address is required');
-      return false;
-    }
-    if (clinicPhoneCtrl.text.isEmpty) {
-      _showError('Clinic Phone is required');
-      return false;
-    }
-    if (diagnosisCtrl.text.isEmpty) {
-      _showError('Diagnosis/Medical Background is required');
-      return false;
-    }
-    if (operationsCtrl.text.isEmpty) {
-      _showError('Previous Operations is required');
-      return false;
-    }
-    if (medicationsCtrl.text.isEmpty) {
-      _showError('Medications is required');
-      return false;
-    }
-    if (certificateFile == null) {
-      _showError('Certificate is required');
-      return false;
-    }
-    if (licenseFile == null) {
-      _showError('License is required');
-      return false;
-    }
-    if (pickedProfilePhoto == null) {
-      _showError('Profile Photo is required');
-      return false;
-    }
-    if (selectedMainSpeciality == null) {
-      _showError('Main Speciality is required');
-      return false;
-    }
-    if (selectedDegree == null) {
-      _showError('Scientific Degree is required');
-      return false;
-    }
     return true;
   }
 
@@ -586,7 +699,191 @@ class _SignUpState extends State<SignUp> {
     return match?.group(0) ?? '+966';
   }
 
-  // Firebase authentication function with Firestore & 2FA implementation
+  // UI Helper for Multiple Medical Fields
+  Widget _buildDynamicList({
+    required String label,
+    required List<TextEditingController> controllers,
+    required List<String?> errors,
+    required VoidCallback onAdd,
+    required Function(int) onRemove,
+    required String hint,
+    required Function(int, String) onValidate,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            StyledLabel(text: label),
+            IconButton(
+              icon: Icon(Icons.add_circle, color: Colors.teal), 
+              onPressed: onAdd
+            ),
+          ],
+        ),
+        ...controllers.asMap().entries.map((entry) {
+          int index = entry.key;
+          TextEditingController ctrl = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: ctrl,
+                    onChanged: (value) => onValidate(index, value),
+                    decoration: _buildInputDecoration(
+                      hint,
+                      errorText: errors[index],
+                    ),
+                  ),
+                ),
+                if (controllers.length > 1)
+                  IconButton(
+                    icon: Icon(Icons.remove_circle, color: Colors.red),
+                    onPressed: () => onRemove(index),
+                  ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  // UPDATED CLINIC UI SECTION
+  Widget _buildClinicSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            StyledLabel(text: 'Work Clinics'),
+            IconButton(
+              icon: Icon(Icons.add_box, color: Colors.teal, size: 30), 
+              onPressed: _addClinicRow
+            ),
+          ],
+        ),
+        ...clinicRows.asMap().entries.map((entry) {
+          int index = entry.key;
+          var row = entry.value;
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Clinic #${index + 1}", 
+                        style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)
+                      ),
+                      if (clinicRows.length > 1)
+                        IconButton(
+                          icon: Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _removeClinicRow(index),
+                        ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: row['name'],
+                    onChanged: (val) {
+                      _validateClinicName(index, val);
+                      _filterClinics(val, index);
+                    },
+                    onTap: () {
+                      setState(() {
+                        showClinicDropdown = true;
+                        currentSearchClinicIndex = index;
+                      });
+                      _filterClinics(row['name']!.text, index);
+                    },
+                    decoration: _buildInputDecoration(
+                      'Search or enter clinic name',
+                      errorText: clinicNameErrors[index],
+                    ),
+                  ),
+                  
+                  // Simple Dropdown for existing clinics
+                  if (showClinicDropdown && currentSearchClinicIndex == index && filteredClinics.isNotEmpty)
+                    Container(
+                      margin: EdgeInsets.only(top: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      constraints: BoxConstraints(maxHeight: 150),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filteredClinics.length,
+                        itemBuilder: (context, i) => ListTile(
+                          title: Text(filteredClinics[i]['name']!),
+                          subtitle: Text(filteredClinics[i]['address']!),
+                          onTap: () {
+                            setState(() {
+                              row['name']!.text = filteredClinics[i]['name']!;
+                              row['address']!.text = filteredClinics[i]['address']!;
+                              row['phone']!.text = filteredClinics[i]['phone']!;
+                              showClinicDropdown = false;
+                              currentSearchClinicIndex = null;
+                            });
+                            _validateClinicName(index, filteredClinics[i]['name']!);
+                            _validateClinicAddress(index, filteredClinics[i]['address']!);
+                            _validateClinicPhone(index, filteredClinics[i]['phone']!);
+                          },
+                        ),
+                      ),
+                    ),
+                  
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: row['address'],
+                    onChanged: (val) => _validateClinicAddress(index, val),
+                    decoration: _buildInputDecoration(
+                      'Clinic Address',
+                      errorText: clinicAddressErrors[index],
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: row['phone'],
+                    onChanged: (val) => _validateClinicPhone(index, val),
+                    decoration: _buildInputDecoration(
+                      'Clinic Phone',
+                      errorText: clinicPhoneErrors[index],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  // Filter clinics based on search query
+  void _filterClinics(String query, int index) {
+    if (query.isEmpty) {
+      setState(() => filteredClinics = availableClinics);
+    } else {
+      setState(() {
+        filteredClinics = availableClinics
+            .where((clinic) => clinic['name']!.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      });
+    }
+  }
+
+  // Firebase authentication function
   Future<void> createUserWithEmailAndPassword() async {
     try {
       setState(() => isLoadingAuth = true);
@@ -607,36 +904,55 @@ class _SignUpState extends State<SignUp> {
         return;
       }
 
-      // Parse comma-separated medical fields
-      final List<String> medications = backend.parseCommaSeparatedString(
-        medicationsCtrl.text,
-      );
-      final List<String> diagnosis = backend.parseCommaSeparatedString(
-        diagnosisCtrl.text,
-      );
-      final List<String> operations = backend.parseCommaSeparatedString(
-        operationsCtrl.text,
-      );
+      // Convert clinic rows to list of maps
+      List<Map<String, String>> clinics = [];
+      for (var row in clinicRows) {
+        clinics.add({
+          'name': row['name']!.text,
+          'address': row['address']!.text,
+          'phone': row['phone']!.text,
+        });
+      }
 
-      // Convert profile photo to File if selected
+      // Convert medical info to lists
+      List<String> medications = [];
+      for (var ctrl in medicationsRows) {
+        if (ctrl.text.isNotEmpty) {
+          medications.add(ctrl.text);
+        }
+      }
+
+      List<String> diagnosis = [];
+      for (var ctrl in diagnosisRows) {
+        if (ctrl.text.isNotEmpty) {
+          diagnosis.add(ctrl.text);
+        }
+      }
+
+      List<String> operations = [];
+      for (var ctrl in operationsRows) {
+        if (ctrl.text.isNotEmpty) {
+          operations.add(ctrl.text);
+        }
+      }
+
+      // Convert files to File objects
       File? profilePhotoFile;
       if (pickedProfilePhoto != null) {
         profilePhotoFile = File(pickedProfilePhoto!.path);
       }
 
-      // Convert certificate file to File if selected
       File? certificatePhotoFile;
       if (certificateFile != null) {
         certificatePhotoFile = File(certificateFile!.path);
       }
 
-      // Convert license file to File if selected
       File? licensePhotoFile;
       if (licenseFile != null) {
         licensePhotoFile = File(licenseFile!.path);
       }
 
-      // Call backend complete signup function
+      // Call backend complete signup function with updated parameters
       await backend.completeSignup(
         email: emailCtrl.text,
         password: passwordCtrl.text,
@@ -646,13 +962,11 @@ class _SignUpState extends State<SignUp> {
         gender: selectedGender ?? 'Male',
         dateOfBirth: selectedDateOfBirth,
         address: addressCtrl.text,
-        city: selectedCity ?? '',
-        region: selectedRegion ?? '',
+        city: selectedCity ?? (cities.isNotEmpty ? cities.first : 'Riyadh'), // SAFE FALLBACK
+        region: selectedRegion ?? (regions.isNotEmpty ? regions.first : 'Region 1'), // SAFE FALLBACK
         mobileNumber: mobileCtrl.text,
         countryCode: _getPhoneCode(selectedCountryCode ?? '+966'),
-        clinicName: clinicNameCtrl.text,
-        clinicAddress: clinicAddressCtrl.text,
-        clinicPhone: clinicPhoneCtrl.text,
+        clinics: clinics, // Now passing list of clinics
         mainSpeciality: selectedMainSpeciality ?? '',
         subSpeciality: selectedSubSpeciality ?? '',
         degree: selectedDegree ?? '',
@@ -663,7 +977,6 @@ class _SignUpState extends State<SignUp> {
         certificateFile: certificatePhotoFile,
         licenseFile: licensePhotoFile,
         audioFile: recordedAudioFile,
-        videoFile: recordedVideoFile,
         onSuccess: (message) {
           _showSuccess('Signup completed successfully!');
           _clearForm();
@@ -691,12 +1004,25 @@ class _SignUpState extends State<SignUp> {
     emailCtrl.clear();
     passwordCtrl.clear();
     confirmPasswordCtrl.clear();
-    clinicNameCtrl.clear();
-    clinicAddressCtrl.clear();
-    clinicPhoneCtrl.clear();
-    diagnosisCtrl.clear();
-    operationsCtrl.clear();
-    medicationsCtrl.clear();
+    
+    // Clear clinic rows
+    for (var row in clinicRows) {
+      row['name']!.clear();
+      row['address']!.clear();
+      row['phone']!.clear();
+    }
+    
+    // Clear medical info rows
+    for (var ctrl in diagnosisRows) {
+      ctrl.clear();
+    }
+    for (var ctrl in operationsRows) {
+      ctrl.clear();
+    }
+    for (var ctrl in medicationsRows) {
+      ctrl.clear();
+    }
+    
     setState(() {
       pickedProfilePhoto = null;
       certificateFile = null;
@@ -707,6 +1033,18 @@ class _SignUpState extends State<SignUp> {
       isRecordingAudio = false;
       _recordingDuration = Duration.zero;
       _recordingTimer?.cancel();
+      
+      // Reset to initial state
+      clinicRows.clear();
+      diagnosisRows.clear();
+      operationsRows.clear();
+      medicationsRows.clear();
+      
+      // Add initial rows
+      _addClinicRow();
+      diagnosisRows.add(TextEditingController());
+      operationsRows.add(TextEditingController());
+      medicationsRows.add(TextEditingController());
     });
   }
 
@@ -769,34 +1107,6 @@ class _SignUpState extends State<SignUp> {
         dateOfBirthError = null; // Clear error when date is selected
       });
     }
-  }
-
-  // UI Helper: Load and search clinics
-  Future<void> loadAndSearchClinics(String query) async {
-    // TODO: Will be implemented in backend
-    // For now, we'll filter the local list
-    if (query.isEmpty) {
-      setState(() => filteredClinics = availableClinics);
-    } else {
-      setState(() {
-        filteredClinics = availableClinics
-            .where(
-              (clinic) =>
-                  clinic['name']!.toLowerCase().contains(query.toLowerCase()),
-            )
-            .toList();
-      });
-    }
-  }
-
-  // UI Helper: Select clinic from dropdown
-  void selectClinic(Map<String, String> clinic) {
-    setState(() {
-      clinicNameCtrl.text = clinic['name'] ?? '';
-      clinicAddressCtrl.text = clinic['address'] ?? '';
-      clinicPhoneCtrl.text = clinic['phone'] ?? '';
-      showClinicDropdown = false;
-    });
   }
 
   @override
@@ -1153,104 +1463,10 @@ class _SignUpState extends State<SignUp> {
                             setState(() => selectedDegree = val),
                       ),
                       const SizedBox(height: 16),
-                      StyledLabel(text: 'Clinic Name'),
-                      const SizedBox(height: 8),
-                      Stack(
-                        children: [
-                          TextField(
-                            controller: clinicNameCtrl,
-                            onChanged: (value) {
-                              _validateClinicName(value);
-                              loadAndSearchClinics(value);
-                            },
-                            onTap: () {
-                              setState(() => showClinicDropdown = true);
-                              loadAndSearchClinics(clinicNameCtrl.text);
-                            },
-                            decoration: _buildInputDecoration(
-                              'Search or enter clinic name',
-                              errorText: clinicNameError,
-                            ),
-                          ),
-                          if (showClinicDropdown && filteredClinics.isNotEmpty)
-                            Positioned(
-                              top: 50,
-                              left: 0,
-                              right: 0,
-                              child: Material(
-                                elevation: 4,
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    maxHeight: 200,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.grey[300]!,
-                                    ),
-                                  ),
-                                  child: ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: filteredClinics.length,
-                                    itemBuilder: (context, index) {
-                                      final clinic = filteredClinics[index];
-                                      return ListTile(
-                                        title: Text(clinic['name']!),
-                                        subtitle: Text(clinic['address']!),
-                                        onTap: () => selectClinic(clinic),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      StyledLabel(text: 'Clinic Address'),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: clinicAddressCtrl,
-                        onChanged: _validateClinicAddress,
-                        decoration: _buildInputDecoration(
-                          'Enter clinic address',
-                          errorText: clinicAddressError,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      StyledLabel(text: 'Clinic Phone'),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 120,
-                            child: StyledDropdown(
-                              items: countryCodes,
-                              initialValue: selectedClinicCountryCode,
-                              onChanged: (val) => setState(
-                                () => selectedClinicCountryCode = val,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: clinicPhoneCtrl,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              onChanged: _validateClinicPhone,
-                              decoration: _buildInputDecoration(
-                                'Enter clinic phone',
-                                errorText: clinicPhoneError,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      
+                      // Updated Clinic Section
+                      _buildClinicSection(),
+                      
                       const SizedBox(height: 16),
                       StyledLabel(text: 'Upload Certificate'),
                       const SizedBox(height: 8),
@@ -1380,54 +1596,43 @@ class _SignUpState extends State<SignUp> {
                     children: [
                       const SizedBox(height: 12),
 
-                      // Diagnosis Field
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [const StyledLabel(text: 'Diagnosis')],
+                      // Diagnosis Field - Updated with dynamic list
+                      _buildDynamicList(
+                        label: 'Diagnosis',
+                        controllers: diagnosisRows,
+                        errors: diagnosisErrors,
+                        onAdd: _addDiagnosisRow,
+                        onRemove: _removeDiagnosisRow,
+                        hint: 'Enter medical background',
+                        onValidate: _validateDiagnosis,
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: diagnosisCtrl,
-                        onChanged: _validateDiagnosis,
-                        decoration: _buildInputDecoration(
-                          'Enter diagnoses (comma-separated)',
-                          errorText: diagnosisError,
-                        ),
-                      ),
+
                       const SizedBox(height: 16),
 
-                      // Previous Operations Field
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const StyledLabel(text: 'Previous Operations'),
-                        ],
+                      // Previous Operations Field - Updated with dynamic list
+                      _buildDynamicList(
+                        label: 'Previous Operations',
+                        controllers: operationsRows,
+                        errors: operationsErrors,
+                        onAdd: _addOperationsRow,
+                        onRemove: _removeOperationsRow,
+                        hint: 'Enter surgery history',
+                        onValidate: _validateOperations,
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: operationsCtrl,
-                        onChanged: _validateOperations,
-                        decoration: _buildInputDecoration(
-                          'Enter operations (comma-separated)',
-                          errorText: operationsError,
-                        ),
-                      ),
+
                       const SizedBox(height: 16),
 
-                      // Medications Field
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [const StyledLabel(text: 'Medications')],
+                      // Medications Field - Updated with dynamic list
+                      _buildDynamicList(
+                        label: 'Medications',
+                        controllers: medicationsRows,
+                        errors: medicationsErrors,
+                        onAdd: _addMedicationsRow,
+                        onRemove: _removeMedicationsRow,
+                        hint: 'Enter current medications',
+                        onValidate: _validateMedications,
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: medicationsCtrl,
-                        onChanged: _validateMedications,
-                        decoration: _buildInputDecoration(
-                          'Enter medications (comma-separated)',
-                          errorText: medicationsError,
-                        ),
-                      ),
+
                       const SizedBox(height: 20),
 
                       // ==========================================
@@ -1559,38 +1764,7 @@ class _SignUpState extends State<SignUp> {
 
                       const SizedBox(height: 16),
 
-                      // Video Recording Button (Placeholder)
-                      GestureDetector(
-                        onTap: () {
-                          _showInfo('Video recording feature coming soon');
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.videocam,
-                                color: Colors.teal,
-                                size: 28,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Record Video',
-                                style: TextStyle(
-                                  color: Colors.teal,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      
                     ],
                   ),
                 ],

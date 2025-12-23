@@ -37,19 +37,20 @@ class SupabaseService {
   }) async {
     try {
       // Construct path: users/{firebaseUid}/{folder}/{fileName}
-      final filePath = 'users/$uid/$folder/$fileName';
+      final filePath = 'public/$uid/$folder/$fileName';
 
       // Upload file to Supabase
-      await client.storage
-          .from(bucketName)
-          .upload(
-            filePath,
-            file,
-            fileOptions: const FileOptions(
-              cacheControl: '3600',
-              upsert: true, // Overwrite if exists
-            ),
-          );
+      // Modify this in supabase_service.dart
+      await client.storage.from(bucketName).upload(
+        filePath,
+        file,
+        fileOptions: FileOptions(
+          cacheControl: '3600',
+          upsert: false,
+          // Add this line to force the correct type for audio
+          contentType: folder == 'audio' ? 'audio/m4a' : 'image/jpeg',
+        ),
+      );
 
       // Get public URL
       final publicUrl = client.storage.from(bucketName).getPublicUrl(filePath);

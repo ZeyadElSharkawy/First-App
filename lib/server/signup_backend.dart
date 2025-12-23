@@ -67,7 +67,7 @@ Future<String> getOrCreateClinic({
   }
 }
 
-/// Save User Profile to Firestore
+/// Save User Profile to Firestore with Multiple Clinics
 /// Creates a complete user document with all signup information
 Future<void> saveUserProfileToFirestore({
   required String uid,
@@ -82,10 +82,7 @@ Future<void> saveUserProfileToFirestore({
   required String region,
   required String mobileNumber,
   required String countryCode,
-  required String clinicName,
-  required String clinicAddress,
-  required String clinicPhone,
-  required String clinicId,
+  required List<Map<String, String>> clinics, // Updated: List of clinics
   required String mainSpeciality,
   required String subSpeciality,
   required String degree,
@@ -99,6 +96,25 @@ Future<void> saveUserProfileToFirestore({
   required String? videoFileUrl,
 }) async {
   try {
+    // Process all clinics and get their IDs
+    List<String> clinicIds = [];
+    List<Map<String, String>> clinicsData = [];
+    
+    for (var clinic in clinics) {
+      String id = await getOrCreateClinic(
+        clinicName: clinic['name']!,
+        clinicAddress: clinic['address']!,
+        clinicPhone: clinic['phone']!,
+      );
+      clinicIds.add(id);
+      clinicsData.add({
+        'clinicId': id,
+        'name': clinic['name']!,
+        'address': clinic['address']!,
+        'phone': clinic['phone']!,
+      });
+    }
+
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'uid': uid,
       'fullName': fullName,
@@ -114,12 +130,8 @@ Future<void> saveUserProfileToFirestore({
       'region': region,
       'mobileNumber': mobileNumber,
       'countryCode': countryCode,
-      'clinic': {
-        'clinicId': clinicId,
-        'name': clinicName,
-        'address': clinicAddress,
-        'phone': clinicPhone,
-      },
+      'clinicIds': clinicIds, // Store list of clinic IDs
+      'clinicsData': clinicsData, // Store clinic details
       'specialization': {
         'main': mainSpeciality,
         'sub': subSpeciality,
@@ -143,6 +155,7 @@ Future<void> saveUserProfileToFirestore({
     });
 
     print('User profile saved successfully for UID: $uid');
+    print('Saved ${clinics.length} clinics');
   } catch (e) {
     print('Error saving user profile to Firestore: $e');
     rethrow;
@@ -153,7 +166,7 @@ Future<void> saveUserProfileToFirestore({
 /// Orchestrates the entire signup flow:
 /// 1. Create Firebase Auth user
 /// 2. Upload files to Supabase
-/// 3. Get or create clinic
+/// 3. Get or create clinics
 /// 4. Save user document to Firestore with Supabase URLs
 Future<void> completeSignup({
   required String email,
@@ -168,9 +181,7 @@ Future<void> completeSignup({
   required String region,
   required String mobileNumber,
   required String countryCode,
-  required String clinicName,
-  required String clinicAddress,
-  required String clinicPhone,
+  required List<Map<String, String>> clinics, // Updated: List of clinics
   required String mainSpeciality,
   required String subSpeciality,
   required String degree,
@@ -181,7 +192,6 @@ Future<void> completeSignup({
   required File? certificateFile,
   required File? licenseFile,
   required File? audioFile,
-  required File? videoFile,
   required Function(String) onSuccess,
   required Function(String) onError,
 }) async {
@@ -195,6 +205,7 @@ Future<void> completeSignup({
 
     final String uid = userCredential.user!.uid;
     print('User authenticated with UID: $uid');
+    print('Processing ${clinics.length} clinics');
 
     // Step 2: Upload files to Supabase and get URLs
     String? profilePhotoUrl;
@@ -253,24 +264,7 @@ Future<void> completeSignup({
       }
     }
 
-    // Upload video file to Supabase
-    if (videoFile != null) {
-      try {
-        videoFileUrl = await SupabaseService.uploadVideoFile(videoFile, uid);
-        print('Video file uploaded: $videoFileUrl');
-      } catch (e) {
-        print('Error uploading video: $e');
-      }
-    }
-
-    // Step 3: Get or create clinic
-    final String clinicId = await getOrCreateClinic(
-      clinicName: clinicName,
-      clinicAddress: clinicAddress,
-      clinicPhone: clinicPhone,
-    );
-
-    // Step 4: Save user profile to Firestore with Supabase URLs
+    // Step 4: Save user profile to Firestore with Supabase URLs and multiple clinics
     await saveUserProfileToFirestore(
       uid: uid,
       fullName: fullName,
@@ -284,10 +278,7 @@ Future<void> completeSignup({
       region: region,
       mobileNumber: mobileNumber,
       countryCode: countryCode,
-      clinicName: clinicName,
-      clinicAddress: clinicAddress,
-      clinicPhone: clinicPhone,
-      clinicId: clinicId,
+      clinics: clinics, // Now passing list of clinics
       mainSpeciality: mainSpeciality,
       subSpeciality: subSpeciality,
       degree: degree,
@@ -302,7 +293,7 @@ Future<void> completeSignup({
     );
 
     onSuccess(
-      'Signup completed successfully! Proceeding to 2FA verification...',
+      'Signup completed successfully!',
     );
   } on FirebaseAuthException catch (e) {
     String errorMessage = 'Authentication error';

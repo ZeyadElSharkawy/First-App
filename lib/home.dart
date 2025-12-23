@@ -96,259 +96,265 @@ class _HomeState extends State<Home> {
     );
   }
 
-  Widget _buildHomePage(Map<String, dynamic> translations, bool isArabic, bool isDark) {
-    final primaryColor = isDark ? Colors.teal[700]! : Colors.teal;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
-    
-    return Stack(
-      children: [
-        // Background curved design
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: CustomPaint(
-            size: Size(MediaQuery.of(context).size.width, 250),
-            painter: CurvedBackgroundPainter(color: primaryColor),
-          ),
+Widget _buildHomePage(Map<String, dynamic> translations, bool isArabic, bool isDark) {
+  final primaryColor = isDark ? Colors.teal[700]! : Colors.teal;
+  final textColor = isDark ? Colors.white : Colors.black87;
+  final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+  
+  return Stack(
+    children: [
+      // Background curved design
+      Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: CustomPaint(
+          size: Size(MediaQuery.of(context).size.width, 250),
+          painter: CurvedBackgroundPainter(color: primaryColor),
         ),
-        
-        SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Home title with icon
-                    Row(
-                      children: [
-                        Text(
-                          translations[AppLocale.home],
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+      ),
+      
+      SafeArea(
+        child: Column(
+          children: [
+            // Header with umbrella icon
+            SizedBox(
+              height: 120, // Fixed height for header area
+              child: Stack(
+                children: [
+                  // Home title on left
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 20),
+                      child: Text(
+                        translations[AppLocale.home],
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.umbrella,
-                            color: primaryColor,
-                            size: 24,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                    
-                    // Profile section
-                    Column(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(translations[AppLocale.profileTapped]),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white,
-                              border: Border.all(color: Colors.white, width: 2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
+                  ),
+                  
+                  // Profile on right
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(translations[AppLocale.profileTapped]),
                                 ),
-                              ],
-                            ),
-                            child: ClipOval(
-                              child: isLoading
-                                  ? CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                                    )
-                                  : profilePhotoUrl != null && profilePhotoUrl!.isNotEmpty
-                                      ? Image.network(
-                                          profilePhotoUrl!,
-                                          fit: BoxFit.cover,
-                                          loadingBuilder: (context, child, loadingProgress) {
-                                            if (loadingProgress == null) return child;
-                                            return Center(
-                                              child: CircularProgressIndicator(
-                                                value: loadingProgress.expectedTotalBytes != null
-                                                    ? loadingProgress.cumulativeBytesLoaded /
-                                                        loadingProgress.expectedTotalBytes!
-                                                    : null,
-                                                strokeWidth: 2,
-                                                valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                                              ),
-                                            );
-                                          },
-                                          errorBuilder: (context, error, stackTrace) {
-                                            print('Error loading profile photo: $error');
-                                            return Icon(
-                                              Icons.person,
-                                              color: primaryColor,
-                                              size: 30,
-                                            );
-                                          },
-                                        )
-                                      : Icon(
-                                          Icons.person,
-                                          color: primaryColor,
-                                          size: 30,
-                                        ),
+                              );
+                            },
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: isLoading
+                                    ? CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                                      )
+                                    : profilePhotoUrl != null && profilePhotoUrl!.isNotEmpty
+                                        ? Image.network(
+                                            profilePhotoUrl!,
+                                            fit: BoxFit.cover,
+                                            loadingBuilder: (context, child, loadingProgress) {
+                                              if (loadingProgress == null) return child;
+                                              return Center(
+                                                child: CircularProgressIndicator(
+                                                  value: loadingProgress.expectedTotalBytes != null
+                                                      ? loadingProgress.cumulativeBytesLoaded /
+                                                          loadingProgress.expectedTotalBytes!
+                                                      : null,
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                                                ),
+                                              );
+                                            },
+                                            errorBuilder: (context, error, stackTrace) {
+                                              print('Error loading profile photo: $error');
+                                              return Icon(
+                                                Icons.person,
+                                                color: primaryColor,
+                                                size: 30,
+                                              );
+                                            },
+                                          )
+                                        : Icon(
+                                            Icons.person,
+                                            color: primaryColor,
+                                            size: 30,
+                                          ),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          userName.split(' ').first,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 4),
+                          Text(
+                            userName.split(' ').first,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // Umbrella icon in the center (between Home and Profile)
+                  Align(
+                    alignment: Alignment.center,
+                    child: Image.asset(
+                      'lib/umbrella.png', // Your umbrella/weather icon
+                      width: 80, // Adjust size as needed
+                      height: 80,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Cards Grid
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 20),
+                child: GridView.count(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 20,
+                  crossAxisSpacing: 20,
+                  children: [
+                    _buildCard(
+                      translations[AppLocale.dashboard],
+                      Icons.speed,
+                      primaryColor,
+                      cardColor,
+                      textColor,
+                      isDark,
+                      () => _navigateToPage(translations[AppLocale.dashboard], translations),
+                    ),
+                    _buildCard(
+                      translations[AppLocale.clinicalRisks],
+                      Icons.shield,
+                      primaryColor,
+                      cardColor,
+                      textColor,
+                      isDark,
+                      () => _navigateToPage('Clinical & Non-clinical Risks', translations),
+                    ),
+                    _buildCard(
+                      translations[AppLocale.ovr],
+                      Icons.location_pin,
+                      primaryColor,
+                      cardColor,
+                      textColor,
+                      isDark,
+                      () => _navigateToPage(translations[AppLocale.ovr], translations),
+                    ),
+                    _buildCard(
+                      translations[AppLocale.staffRisk],
+                      Icons.people,
+                      primaryColor,
+                      cardColor,
+                      textColor,
+                      isDark,
+                      () => _navigateToPage(translations[AppLocale.staffRisk], translations),
+                    ),
+                    _buildCard(
+                      translations[AppLocale.pcraIcra],
+                      Icons.construction,
+                      primaryColor,
+                      cardColor,
+                      textColor,
+                      isDark,
+                      () => _navigateToPage(translations[AppLocale.pcraIcra], translations),
+                    ),
+                    _buildCard(
+                      translations[AppLocale.kpis],
+                      Icons.bar_chart,
+                      primaryColor,
+                      cardColor,
+                      textColor,
+                      isDark,
+                      () => _navigateToPage(translations[AppLocale.kpis], translations),
                     ),
                   ],
                 ),
               ),
-              
-              // Cards Grid
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 20,
-                    crossAxisSpacing: 20,
-                    children: [
-                      _buildCard(
-                        translations[AppLocale.dashboard],
-                        Icons.speed,
-                        primaryColor,
-                        cardColor,
-                        textColor,
-                        isDark,
-                        () => _navigateToPage(translations[AppLocale.dashboard], translations),
-                      ),
-                      _buildCard(
-                        translations[AppLocale.clinicalRisks],
-                        Icons.shield,
-                        primaryColor,
-                        cardColor,
-                        textColor,
-                        isDark,
-                        () => _navigateToPage('Clinical & Non-clinical Risks', translations),
-                      ),
-                      _buildCard(
-                        translations[AppLocale.ovr],
-                        Icons.location_pin,
-                        primaryColor,
-                        cardColor,
-                        textColor,
-                        isDark,
-                        () => _navigateToPage(translations[AppLocale.ovr], translations),
-                      ),
-                      _buildCard(
-                        translations[AppLocale.staffRisk],
-                        Icons.people,
-                        primaryColor,
-                        cardColor,
-                        textColor,
-                        isDark,
-                        () => _navigateToPage(translations[AppLocale.staffRisk], translations),
-                      ),
-                      _buildCard(
-                        translations[AppLocale.pcraIcra],
-                        Icons.construction,
-                        primaryColor,
-                        cardColor,
-                        textColor,
-                        isDark,
-                        () => _navigateToPage(translations[AppLocale.pcraIcra], translations),
-                      ),
-                      _buildCard(
-                        translations[AppLocale.kpis],
-                        Icons.bar_chart,
-                        primaryColor,
-                        cardColor,
-                        textColor,
-                        isDark,
-                        () => _navigateToPage(translations[AppLocale.kpis], translations),
-                      ),
-                    ],
-                  ),
-                ),
+            ),
+          ],
+        ),
+      ),
+      
+      // Bottom Navigation Bar
+      Positioned(
+        bottom: 0,
+        left: 0,
+        right: 0,
+        child: Container(
+          decoration: BoxDecoration(
+            color: primaryColor,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
               ),
             ],
           ),
-        ),
-        
-        // Bottom Navigation Bar
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            decoration: BoxDecoration(
-              color: primaryColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(30),
-                topRight: Radius.circular(30),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildNavItem(
-                      icon: Icons.home,
-                      label: translations[AppLocale.home],
-                      isSelected: _selectedIndex == 0,
-                      onTap: () => _onNavItemTapped(0),
-                    ),
-                    _buildNavItem(
-                      icon: Icons.settings,
-                      label: translations[AppLocale.settings],
-                      isSelected: _selectedIndex == 1,
-                      onTap: () => _onNavItemTapped(1),
-                    ),
-                  ],
-                ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(
+                    icon: Icons.home,
+                    label: translations[AppLocale.home],
+                    isSelected: _selectedIndex == 0,
+                    onTap: () => _onNavItemTapped(0),
+                  ),
+                  _buildNavItem(
+                    icon: Icons.settings,
+                    label: translations[AppLocale.settings],
+                    isSelected: _selectedIndex == 1,
+                    onTap: () => _onNavItemTapped(1),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   Widget _buildCard(
     String title,
@@ -368,8 +374,8 @@ class _HomeState extends State<Home> {
           boxShadow: [
             BoxShadow(
               color: isDark 
-                  ? Colors.black.withValues(alpha: 0.4)
-                  : Colors.grey.withValues(alpha: 0.2),
+                  ? Colors.black.withOpacity(0.4)
+                  : Colors.grey.withOpacity(0.2),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -381,7 +387,7 @@ class _HomeState extends State<Home> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
+                color: color.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -420,7 +426,7 @@ class _HomeState extends State<Home> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
+          color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -466,17 +472,18 @@ class CurvedBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path();
-    path.moveTo(0, 0);
-    path.lineTo(0, size.height * 0.7);
+    
+    path.moveTo(0, 0); 
+    // This creates a steep curve that starts and peaks on the left side
+    path.lineTo(0, size.height * 0.9); 
     path.quadraticBezierTo(
-      size.width * 0.5,
-      size.height * 1.2,
-      size.width,
-      size.height * 0.7,
+      size.width * 0.05, // Peak is at 5% width (Top Left)
+      size.height * 0.5, 
+      size.width,        // Ends at the right edge
+      0,                 // Back to the top
     );
-    path.lineTo(size.width, 0);
-    path.close();
 
+    path.close();
     canvas.drawPath(path, paint);
   }
 
